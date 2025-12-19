@@ -1,3 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <manifest>
+    <!-- Device Tree -->
     <project name="piashmsubd/android_device_nubia_NX669J" path="device/nubia/NX669J" remote="github" revision="lineage-19.1" />
+    
+    <!-- Kernel Source (official from ztemt) -->
+    <project name="ztemt/NX669J-kernel" path="kernel/nubia/sm8350" remote="github" revision="main" />
 </manifest>

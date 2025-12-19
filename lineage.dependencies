@@ -1,0 +1,8 @@
+[
+  {
+    "repository": "ztemt/NX669J-kernel",
+    "target_path": "kernel/nubia/sm8350",
+    "remote": "github",
+    "revision": "main"
+  }
+]

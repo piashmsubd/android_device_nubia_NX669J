@@ -1,0 +1,125 @@
+name: Build Halium Boot
+
+on:
+  push:
+    branches:
+      - lineage-19.1
+      - lineage-20
+      - halium-*
+  pull_request:
+    branches:
+      - lineage-19.1
+      - lineage-20
+      - halium-*
+  workflow_dispatch:
+    inputs:
+      halium_version:
+        description: 'Halium version (e.g., halium-11, halium-12)'
+        required: true
+        default: 'halium-11'
+        type: choice
+        options:
+          - halium-9.0
+          - halium-10
+          - halium-11
+          - halium-12
+
+permissions:
+  contents: read
+
+env:
+  DEVICE: NX669J
+  VENDOR: nubia
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout device tree
+        uses: actions/checkout@v4
+        with:
+          path: device/${{ env.VENDOR }}/${{ env.DEVICE }}
+
+      - name: Free Disk Space
+        uses: jlumbroso/free-disk-space@main
+        with:
+          tool-cache: true
+          android: false
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - name: Setup build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex g++-multilib \
+            gcc-multilib git gnupg gperf imagemagick lib32ncurses5-dev \
+            lib32readline-dev lib32z1-dev libelf-dev liblz4-tool \
+            libncurses5 libncurses5-dev libsdl1.2-dev libssl-dev \
+            libxml2 libxml2-utils lzop pngcrush rsync schedtool \
+            squashfs-tools xsltproc zip zlib1g-dev python3 python-is-python3 \
+            openjdk-11-jdk git-lfs repo android-sdk-libsparse-utils
+
+      - name: Configure Git
+        run: |
+          git config --global user.email "build@halium.org"
+          git config --global user.name "Halium Build Bot"
+          git lfs install
+
+      - name: Initialize Halium manifest
+        run: |
+          mkdir -p halium
+          cd halium
+          HALIUM_VERSION="${{ github.event.inputs.halium_version || 'halium-11' }}"
+          repo init -u https://github.com/halium/android.git -b ${HALIUM_VERSION} --depth=1
+
+      - name: Setup local manifest
+        run: |
+          mkdir -p halium/.repo/local_manifests
+          cat > halium/.repo/local_manifests/nubia_nx669j.xml << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+              <!-- Device Tree -->
+              <project name="piashmsubd/android_device_nubia_NX669J" path="device/nubia/NX669J" remote="github" revision="lineage-19.1" />
+              
+              <!-- Kernel Source -->
+              <project name="ztemt/NX669J-kernel" path="kernel/nubia/sm8350" remote="github" revision="main" />
+          </manifest>
+          EOF
+
+      - name: Sync source
+        run: |
+          cd halium
+          repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+      - name: Build halium-boot
+        run: |
+          cd halium
+          source build/envsetup.sh
+          breakfast ${{ env.DEVICE }}
+          make -j$(nproc --all) halium-boot
+
+      - name: Upload halium-boot.img
+        uses: actions/upload-artifact@v4
+        with:
+          name: halium-boot-${{ env.DEVICE }}
+          path: |
+            halium/out/target/product/${{ env.DEVICE }}/halium-boot.img
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload build logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ env.DEVICE }}
+          path: |
+            halium/out/error.log
+            halium/out/*.log
+          retention-days: 3
+          if-no-files-found: ignore
