@@ -24,6 +24,9 @@ on:
           - halium-11
           - halium-12
 
+permissions:
+  contents: read
+
 env:
   DEVICE: NX669J
   VENDOR: nubia
